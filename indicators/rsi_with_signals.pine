@@ -1,0 +1,38 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0
+// © opmau
+
+//@version=5
+indicator(title="RSI with Signals", shorttitle="RSI Signals", overlay=false)
+
+// --- Inputs ---
+rsiLength    = input.int(14,  title="RSI Length",          minval=1)
+overbought   = input.int(70,  title="Overbought Level",    minval=50, maxval=100)
+oversold     = input.int(30,  title="Oversold Level",      minval=0,  maxval=50)
+source       = input.source(close, title="Source")
+
+// --- Calculations ---
+rsiValue = ta.rsi(source, rsiLength)
+
+// --- Signals ---
+isOverbought = rsiValue >= overbought
+isOversold   = rsiValue <= oversold
+
+// --- Plots ---
+hline(overbought, "Overbought", color=color.red,   linestyle=hline.style_dashed)
+hline(50,         "Midline",    color=color.gray,  linestyle=hline.style_dotted)
+hline(oversold,   "Oversold",   color=color.green, linestyle=hline.style_dashed)
+
+rsiColor = isOverbought ? color.red : isOversold ? color.green : color.purple
+plot(rsiValue, title="RSI", color=rsiColor, linewidth=2)
+
+// --- Background highlight ---
+bgcolor(isOverbought ? color.new(color.red,   85) : na, title="Overbought Zone")
+bgcolor(isOversold   ? color.new(color.green, 85) : na, title="Oversold Zone")
+
+// --- Shapes ---
+plotshape(ta.crossunder(rsiValue, overbought), title="Sell Signal",
+     style=shape.labeldown, location=location.top,
+     color=color.red, text="Sell", textcolor=color.white, size=size.small)
+plotshape(ta.crossover(rsiValue, oversold), title="Buy Signal",
+     style=shape.labelup, location=location.bottom,
+     color=color.green, text="Buy", textcolor=color.white, size=size.small)
