@@ -1,0 +1,90 @@
+//@version=5
+// =====================================================================
+//  Mean-Reversion (Hurst-gated)  -  TradingView / Pine Script v5
+//
+//  Ported from the Zorro lite-C strategy Strat_Mean_revers_Hurst.c.
+//
+//  Pipeline (faithful to the source):
+//    1. Ehlers 2-pole High-Pass filter removes the trend (slow cycles).
+//    2. Fisher transform, normalised over a lookback, turns the detrended
+//       series into a bell-shaped oscillator with stable +/-1 tails.
+//    3. A Hurst exponent (rescaled-range, R/S) gates trading: only take
+//       mean-reversion trades when Hurst < 0.5 (mean-reverting regime).
+//    4. Enter long when the oscillator crosses below -1 (lower tail),
+//       short when it crosses above +1; exit on the opposite signal or an
+//       ATR stop.
+//
+//  Plotted in a sub-pane: the oscillator with +/-1 bands, regime shading,
+//  and the Hurst value (Data Window). Trades still mark on the price chart.
+//  Illustrative engineering demo - not trading advice.
+// =====================================================================
+strategy("Mean-Reversion (Hurst-gated) - sample", overlay=false,
+     default_qty_type=strategy.percent_of_equity, default_qty_value=100,
+     initial_capital=10000, commission_type=strategy.commission.percent,
+     commission_value=0.02)
+
+// ---- inputs ----
+src       = input.source(close, "Source")
+hpPeriod  = input.int(30,  "High-Pass period (detrend)", minval=4)
+normLen   = input.int(300, "Fisher normalisation length", minval=20)
+hurstLen  = input.int(120, "Hurst window", minval=20)
+threshold = input.float(1.0, "Signal threshold", step=0.1)
+atrLen    = input.int(100, "ATR length (stop)", minval=1)
+atrMult   = input.float(1.0, "ATR stop multiple", step=0.1)
+
+// ---- 1. Ehlers 2-pole high-pass filter (detrend) ----
+a = (math.cos(0.707*2*math.pi/hpPeriod) + math.sin(0.707*2*math.pi/hpPeriod) - 1) / math.cos(0.707*2*math.pi/hpPeriod)
+float hp = na
+hp := nz((1 - a/2)*(1 - a/2)*(src - 2*nz(src[1]) + nz(src[2])) + 2*(1 - a)*nz(hp[1]) - (1 - a)*(1 - a)*nz(hp[2]), 0)
+
+// ---- 2. Fisher-transform normalisation -> oscillator ----
+hh  = ta.highest(hp, normLen)
+ll  = ta.lowest(hp,  normLen)
+raw = hh != ll ? 2*(hp - ll)/(hh - ll) - 1 : 0.0
+raw := math.max(math.min(raw, 0.999), -0.999)
+signal = 0.5 * math.log((1 + raw)/(1 - raw))
+
+// ---- 3. Hurst exponent (single-scale rescaled range R/S) ----
+ret     = nz(math.log(src / src[1]), 0.0)
+meanRet = ta.sma(ret, hurstLen)
+float cumdev = 0.0
+float mincd  = na
+float maxcd  = na
+for j = 0 to hurstLen - 1
+    i = hurstLen - 1 - j
+    cumdev := cumdev + (nz(ret[i]) - meanRet)
+    mincd := na(mincd) ? cumdev : math.min(mincd, cumdev)
+    maxcd := na(maxcd) ? cumdev : math.max(maxcd, cumdev)
+R  = maxcd - mincd
+S  = ta.stdev(ret, hurstLen)
+RS = S > 0 ? R / S : na
+hurst = (na(RS) or RS <= 0) ? 0.5 : math.log(RS) / math.log(hurstLen)
+meanRevRegime = hurst < 0.5
+
+// ---- 4. signals & orders ----
+longSig  = ta.crossunder(signal, -threshold)
+shortSig = ta.crossover(signal,   threshold)
+
+if meanRevRegime and longSig
+    strategy.entry("Long", strategy.long)
+if meanRevRegime and shortSig
+    strategy.entry("Short", strategy.short)
+
+atrStop = ta.atr(atrLen) * atrMult
+if strategy.position_size > 0
+    strategy.exit("Long stop", "Long", stop = strategy.position_avg_price - atrStop)
+if strategy.position_size < 0
+    strategy.exit("Short stop", "Short", stop = strategy.position_avg_price + atrStop)
+
+// ---- plots ----
+plot(signal, "Fisher signal", color=color.new(color.blue, 0))
+hline(threshold,  "Upper", color=color.new(color.gray, 40), linestyle=hline.style_dashed)
+hline(-threshold, "Lower", color=color.new(color.gray, 40), linestyle=hline.style_dashed)
+hline(0, "Zero", color=color.new(color.gray, 70))
+bgcolor(meanRevRegime ? color.new(color.teal, 92) : na, title="Mean-reverting regime")
+plot(hurst, "Hurst", color=color.new(color.purple, 0), display=display.data_window)
+plotshape(meanRevRegime and longSig,  "Long",  style=shape.triangleup,   location=location.bottom, color=color.new(color.green, 0), size=size.tiny)
+plotshape(meanRevRegime and shortSig, "Short", style=shape.triangledown, location=location.top,    color=color.new(color.red, 0),   size=size.tiny)
+
+alertcondition(meanRevRegime and longSig,  "MR Long",  "Hurst mean-reversion: LONG")
+alertcondition(meanRevRegime and shortSig, "MR Short", "Hurst mean-reversion: SHORT")
