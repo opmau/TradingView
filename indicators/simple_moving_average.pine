@@ -1,0 +1,18 @@
+// This source code is subject to the terms of the MIT License
+// © opmau
+
+//@version=5
+indicator(title="Simple Moving Average", shorttitle="SMA", overlay=true)
+
+// --- Inputs ---
+smaLength = input.int(20,     title="SMA Length", minval=1)
+emaLength = input.int(20,     title="EMA Length", minval=1)
+showEma   = input.bool(false, title="Show EMA")
+
+// --- Calculations ---
+smaValue = ta.sma(close, smaLength)
+emaValue = ta.ema(close, emaLength)
+
+// --- Plots ---
+plot(smaValue,                   color=color.blue,   linewidth=2, title="SMA")
+plot(showEma ? emaValue : na,    color=color.orange, linewidth=2, title="EMA")
