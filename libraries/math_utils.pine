@@ -1,4 +1,4 @@
-// This source code is subject to the terms of the Mozilla Public License 2.0
+// This source code is subject to the terms of the MIT License
 // © opmau
 
 //@version=5
@@ -28,10 +28,10 @@ export clamp(float x, float low, float high) =>
 export lerp(float a, float b, float t) =>
     a + (b - a) * clamp(t, 0.0, 1.0)
 
-// @function Normalises x to the range [0, 1] given known min and max.
-// @param x   (float) Value to normalise.
+// @function Normalizes x to the range [0, 1] given known min and max.
+// @param x   (float) Value to normalize.
 // @param low  (float) Minimum of the range.
 // @param high (float) Maximum of the range.
-// @returns (float) Normalised value in [0, 1].
-export normalise(float x, float low, float high) =>
+// @returns (float) Normalized value in [0, 1].
+export normalize(float x, float low, float high) =>
     high == low ? 0.0 : clamp((x - low) / (high - low), 0.0, 1.0)
